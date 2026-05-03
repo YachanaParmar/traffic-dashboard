@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRAFFIQ.AI — Predictive Traffic Congestion Intelligence</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0c10;--surface:#111318;--surface2:#181c22;--border:#1e2430;
+  --accent:#00d4ff;--warn:#ff6b35;--ok:#00e676;--danger:#ff1744;--yellow:#ffd600;
+  --text:#e0e8f0;--muted:#4a5568;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;font-size:13px}
+.dashboard{display:grid;grid-template-rows:48px 1fr 36px;height:100vh}
+
+/* HEADER */
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:16px;font-weight:700;letter-spacing:2px;color:var(--accent)}
+.header-center{display:flex;gap:12px;align-items:center}
+.status-pill{background:rgba(0,230,118,0.12);border:1px solid rgba(0,230,118,0.3);color:var(--ok);font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 10px;border-radius:20px;display:flex;align-items:center;gap:5px}
+.pulse{width:6px;height:6px;background:var(--ok);border-radius:50%;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(0.7)}}
+.header-right{display:flex;gap:16px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)}
+
+/* MAIN */
+.main{display:grid;grid-template-columns:270px 1fr 230px;gap:1px;background:var(--border);overflow:hidden}
+
+/* PANELS */
+.left-panel,.right-panel{background:var(--surface);padding:10px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+.panel-title{font-size:9px;font-weight:600;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+
+/* METRIC CARDS */
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.metric{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+.metric-val{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;line-height:1.1}
+.metric-label{font-size:9px;color:var(--muted);margin-top:2px;letter-spacing:.5px}
+.m-accent{border-color:rgba(0,212,255,0.3);background:rgba(0,212,255,0.04)}
+.m-warn{border-color:rgba(255,107,53,0.3);background:rgba(255,107,53,0.04)}
+.m-danger{border-color:rgba(255,23,68,0.3);background:rgba(255,23,68,0.04)}
+.m-ok{border-color:rgba(0,230,118,0.3);background:rgba(0,230,118,0.04)}
+.c-accent{color:var(--accent)} .c-warn{color:var(--warn)} .c-danger{color:var(--danger)} .c-ok{color:var(--ok)} .c-yellow{color:var(--yellow)}
+
+/* CCTV */
+.cctv-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.cctv-wrap{position:relative;border-radius:6px;overflow:hidden;border:1px solid var(--border);cursor:pointer;aspect-ratio:4/3;background:#000}
+.cctv-wrap:hover{border-color:var(--accent)}
+.cctv-label{position:absolute;top:4px;left:4px;font-family:'JetBrains Mono',monospace;font-size:8px;color:rgba(255,255,255,0.7);background:rgba(0,0,0,0.6);padding:2px 4px;border-radius:3px}
+.cctv-status-tag{position:absolute;bottom:4px;right:4px;font-family:'JetBrains Mono',monospace;font-size:8px;padding:2px 5px;border-radius:3px}
+.live-badge{position:absolute;top:4px;right:4px;background:var(--danger);color:#fff;font-size:7px;font-family:'JetBrains Mono',monospace;padding:1px 4px;border-radius:2px;letter-spacing:1px}
+
+/* MAP */
+.map-area{position:relative;background:#0a0c10;overflow:hidden}
+#trafficMap{position:absolute;top:0;left:0;width:100%;height:100%}
+.map-overlay{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;pointer-events:none;z-index:5}
+.map-badge{background:rgba(10,12,16,0.9);border:1px solid var(--border);border-radius:8px;padding:7px 12px}
+.map-badge-title{font-size:9px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.map-badge-val{font-size:13px;font-weight:600;color:var(--accent);font-family:'JetBrains Mono',monospace;margin-top:2px}
+.legend-box{background:rgba(10,12,16,0.9);border:1px solid var(--border);border-radius:8px;padding:8px 12px}
+.legend-row{display:flex;align-items:center;gap:7px;font-size:10px;margin-bottom:3px}
+.legend-row:last-child{margin-bottom:0}
+.ldot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.map-controls{position:absolute;bottom:10px;left:10px;display:flex;gap:6px;z-index:5}
+.map-btn{background:rgba(10,12,16,0.9);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 12px;border-radius:6px;cursor:pointer}
+.map-btn:hover,.map-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,0.08)}
+.node-tooltip{position:absolute;background:rgba(8,10,14,0.97);border:1px solid var(--accent);border-radius:8px;padding:9px 12px;font-size:10px;pointer-events:none;z-index:20;display:none;min-width:150px}
+.tt-title{font-weight:700;font-size:11px;margin-bottom:5px;color:var(--accent)}
+.tt-row{display:flex;justify-content:space-between;gap:16px;margin-bottom:2px;color:var(--muted)}
+.tt-val{color:var(--text);font-family:'JetBrains Mono',monospace}
+
+/* PREDICTIONS */
+.pred-list{display:flex;flex-direction:column;gap:6px}
+.pred-card{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px}
+.pred-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.pred-road{font-size:11px;font-weight:600}
+.pred-pct{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700}
+.pred-bar-bg{background:var(--border);height:4px;border-radius:2px;overflow:hidden;margin-bottom:4px}
+.pred-bar{height:4px;border-radius:2px;transition:width 1.5s ease}
+.pred-note{font-size:9px;color:var(--muted)}
+
+/* EVENTS */
+.event-feed{display:flex;flex-direction:column;gap:0;max-height:160px;overflow-y:auto}
+.event-item{display:flex;gap:7px;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--border)}
+.event-item:last-child{border-bottom:none}
+.ev-icon{width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;margin-top:1px}
+.ev-text{font-size:10px;line-height:1.4;flex:1}
+.ev-time{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);white-space:nowrap}
+
+/* SIM CONTROLS */
+.sim-box{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.sim-label{display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px}
+.sim-btns{display:flex;gap:6px}
+.sim-btn{flex:1;background:transparent;border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 8px;border-radius:5px;cursor:pointer}
+.sim-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* CV STATS */
+.cv-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center}
+.cv-stat{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px}
+.cv-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace}
+.cv-label{font-size:9px;color:var(--muted);margin-top:2px}
+
+/* MODAL */
+.modal-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:100;display:none;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:400px;overflow:hidden}
+.modal-head{background:var(--surface2);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.modal-head-title{font-size:13px;font-weight:700}
+.modal-close{cursor:pointer;color:var(--muted);font-size:20px;line-height:1;background:none;border:none;color:var(--muted)}
+.modal-body{padding:14px}
+.modal-view{background:#000;border-radius:6px;height:160px;position:relative;overflow:hidden;margin-bottom:10px}
+.modal-live{position:absolute;top:6px;left:6px;background:var(--danger);color:#fff;font-size:8px;font-family:'JetBrains Mono',monospace;padding:2px 5px;border-radius:2px;letter-spacing:1px}
+.modal-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.modal-stat{background:var(--surface2);border-radius:6px;padding:8px 10px}
+.modal-stat-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace}
+.modal-stat-label{font-size:9px;color:var(--muted);margin-top:2px}
+.modal-note{background:var(--surface2);border-radius:6px;padding:8px 10px;margin-top:8px}
+.modal-note-label{font-size:9px;color:var(--muted);margin-bottom:3px}
+.modal-note-text{font-size:11px}
+
+/* BOTTOM BAR */
+.bottom-bar{background:var(--surface);border-top:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between}
+.model-status{display:flex;gap:16px}
+.model-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.mdot{width:6px;height:6px;border-radius:50%}
+
+/* FORECAST */
+.forecast-wrap{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px}
+
+/* FUSION STATUS */
+.fusion-box{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:5px}
+.fusion-row{display:flex;justify-content:space-between;align-items:center;font-size:10px}
+.fusion-label{color:var(--muted)}
+
+input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+<!-- HEADER -->
+<div class="header">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="logo">TRAFFIQ.AI</div>
+    <div style="width:1px;height:20px;background:var(--border)"></div>
+    <span style="font-size:11px;color:var(--muted)">Predictive Traffic Congestion Intelligence System</span>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <div class="status-pill"><div class="pulse"></div>LIVE — 14 Nodes Active</div>
+    <div style="font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace">LSTM-v3.1 · YOLOv8 · Maps API</div>
+  </div>
+  <div class="header-right">
+    <span id="clockDisplay">00:00:00</span>
+    <span style="color:var(--border)">|</span>
+    <span>Bengaluru Metro</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+
+    <div>
+      <div class="panel-title">Live Network Metrics</div>
+      <div class="metric-grid">
+        <div class="metric m-accent">
+          <div class="metric-val c-accent" id="vehicleCount">847</div>
+          <div class="metric-label">VEHICLES DETECTED</div>
+        </div>
+        <div class="metric m-warn">
+          <div class="metric-val c-warn" id="avgSpeed">23</div>
+          <div class="metric-label">AVG SPEED (KM/H)</div>
+        </div>
+        <div class="metric m-danger">
+          <div class="metric-val c-danger" id="congestionZones">4</div>
+          <div class="metric-label">CONGESTION ZONES</div>
+        </div>
+        <div class="metric m-ok">
+          <div class="metric-val c-ok" id="clearRoads">10</div>
+          <div class="metric-label">CLEAR ROADS</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">CCTV Node Feeds — Click to Inspect</div>
+      <div class="cctv-grid">
+        <div class="cctv-wrap" onclick="openModal('MG Road Junction','High',72,'18 km/h','Stalled truck detected in lane 2 — YOLOv8 confidence: 0.97')">
+          <canvas id="cctv1" width="130" height="97" style="width:100%;height:100%"></canvas>
+          <div class="cctv-label">CAM-01 · MG Rd</div>
+          <div class="cctv-status-tag" style="background:rgba(255,23,68,0.2);color:var(--danger)">HIGH</div>
+          <div class="live-badge">● LIVE</div>
+        </div>
+        <div class="cctv-wrap" onclick="openModal('Silk Board Flyover','Critical',95,'8 km/h','Multi-vehicle pileup — Level 5 standstill confirmed')">
+          <canvas id="cctv2" width="130" height="97" style="width:100%;height:100%"></canvas>
+          <div class="cctv-label">CAM-02 · Silk Bd</div>
+          <div class="cctv-status-tag" style="background:rgba(255,23,68,0.2);color:var(--danger)">CRITICAL</div>
+          <div class="live-badge">● LIVE</div>
+        </div>
+        <div class="cctv-wrap" onclick="openModal('Hebbal Interchange','Moderate',48,'34 km/h','Normal peak hour flow — density within threshold')">
+          <canvas id="cctv3" width="130" height="97" style="width:100%;height:100%"></canvas>
+          <div class="cctv-label">CAM-03 · Hebbal</div>
+          <div class="cctv-status-tag" style="background:rgba(255,214,0,0.15);color:var(--yellow)">MODERATE</div>
+          <div class="live-badge">● LIVE</div>
+        </div>
+        <div class="cctv-wrap" onclick="openModal('Koramangala Signal','Low',21,'52 km/h','Traffic flowing well — no anomalies detected')">
+          <canvas id="cctv4" width="130" height="97" style="width:100%;height:100%"></canvas>
+          <div class="cctv-label">CAM-04 · Koramangala</div>
+          <div class="cctv-status-tag" style="background:rgba(0,230,118,0.15);color:var(--ok)">LOW</div>
+          <div class="live-badge">● LIVE</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">15-Minute Congestion Forecast (LSTM)</div>
+      <div class="forecast-wrap">
+        <canvas id="forecastChart" height="90"></canvas>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Data Fusion Pipeline Status</div>
+      <div class="fusion-box">
+        <div class="fusion-row"><span class="fusion-label">Google Maps API</span><span style="color:var(--ok);font-family:'JetBrains Mono',monospace;font-size:10px">● SYNCED</span></div>
+        <div class="fusion-row"><span class="fusion-label">CCTV Computer Vision (YOLOv8)</span><span style="color:var(--ok);font-family:'JetBrains Mono',monospace;font-size:10px">● 28 FPS</span></div>
+        <div class="fusion-row"><span class="fusion-label">LSTM Prediction Engine</span><span style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:10px">● RUNNING</span></div>
+        <div class="fusion-row"><span class="fusion-label">Cross-modal Fusion Layer</span><span style="color:var(--ok);font-family:'JetBrains Mono',monospace;font-size:10px">● FUSED</span></div>
+        <div class="fusion-row"><span class="fusion-label">False Positive Filter</span><span style="color:var(--ok);font-family:'JetBrains Mono',monospace;font-size:10px">● ACTIVE</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MAP -->
+  <div class="map-area">
+    <canvas id="trafficMap"></canvas>
+
+    <div class="map-overlay">
+      <div class="map-badge">
+        <div class="map-badge-title">Coverage Area</div>
+        <div class="map-badge-val">Bengaluru Metro · 124 km²</div>
+      </div>
+      <div class="legend-box">
+        <div class="legend-row"><div class="ldot" style="background:#ff1744"></div>Standstill (Level 5)</div>
+        <div class="legend-row"><div class="ldot" style="background:#ff6b35"></div>Heavy congestion</div>
+        <div class="legend-row"><div class="ldot" style="background:#ffd600"></div>Moderate flow</div>
+        <div class="legend-row"><div class="ldot" style="background:#00e676"></div>Free flow</div>
+        <div class="legend-row"><div class="ldot" style="background:rgba(0,212,255,0.7);outline:1px dashed var(--accent);outline-offset:1px"></div>LSTM Predicted hotspot</div>
+      </div>
+    </div>
+
+    <div class="map-controls">
+      <button class="map-btn active" id="btnTraffic" onclick="setLayer('traffic',this)">Traffic Layer</button>
+      <button class="map-btn" id="btnPred" onclick="setLayer('prediction',this)">Prediction Layer</button>
+      <button class="map-btn" id="btnHeat" onclick="setLayer('heatmap',this)">Heat Map</button>
+    </div>
+
+    <div class="node-tooltip" id="nodeTooltip">
+      <div class="tt-title" id="tt-name">—</div>
+      <div class="tt-row"><span>Density</span><span class="tt-val" id="tt-density">—</span></div>
+      <div class="tt-row"><span>Avg Speed</span><span class="tt-val" id="tt-speed">—</span></div>
+      <div class="tt-row"><span>Level</span><span class="tt-val" id="tt-level">—</span></div>
+      <div class="tt-row"><span>CCTV</span><span class="tt-val" id="tt-cam">—</span></div>
+      <div class="tt-row"><span>Jam Prob</span><span class="tt-val" id="tt-prob">—</span></div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <div>
+      <div class="panel-title">Standstill Probability — Next 45 min</div>
+      <div class="pred-list">
+        <div class="pred-card">
+          <div class="pred-top"><span class="pred-road">Silk Board Flyover</span><span class="pred-pct c-danger" id="p1">92%</span></div>
+          <div class="pred-bar-bg"><div class="pred-bar" id="pb1" style="width:92%;background:var(--danger)"></div></div>
+          <div class="pred-note">Standstill in ~8 min · Conf: 0.94</div>
+        </div>
+        <div class="pred-card">
+          <div class="pred-top"><span class="pred-road">MG Road</span><span class="pred-pct c-warn" id="p2">74%</span></div>
+          <div class="pred-bar-bg"><div class="pred-bar" id="pb2" style="width:74%;background:var(--warn)"></div></div>
+          <div class="pred-note">Heavy jam ~20 min · Conf: 0.81</div>
+        </div>
+        <div class="pred-card">
+          <div class="pred-top"><span class="pred-road">Outer Ring Road</span><span class="pred-pct c-warn" id="p3">63%</span></div>
+          <div class="pred-bar-bg"><div class="pred-bar" id="pb3" style="width:63%;background:var(--warn)"></div></div>
+          <div class="pred-note">Congestion wave ~25 min · Conf: 0.75</div>
+        </div>
+        <div class="pred-card">
+          <div class="pred-top"><span class="pred-road">Hebbal Interchange</span><span class="pred-pct c-yellow" id="p4">51%</span></div>
+          <div class="pred-bar-bg"><div class="pred-bar" id="pb4" style="width:51%;background:var(--yellow)"></div></div>
+          <div class="pred-note">Moderate slowdown ~35 min · Conf: 0.67</div>
+        </div>
+        <div class="pred-card">
+          <div class="pred-top"><span class="pred-road">Whitefield</span><span class="pred-pct c-ok" id="p5">28%</span></div>
+          <div class="pred-bar-bg"><div class="pred-bar" id="pb5" style="width:28%;background:var(--ok)"></div></div>
+          <div class="pred-note">Low risk · Confidence: 0.89</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">YOLOv8 CV Detection Summary</div>
+      <div class="cv-grid">
+        <div class="cv-stat"><div class="cv-val c-accent" id="cvCars">612</div><div class="cv-label">CARS</div></div>
+        <div class="cv-stat"><div class="cv-val c-yellow" id="cvBikes">183</div><div class="cv-label">BIKES / 2W</div></div>
+        <div class="cv-stat"><div class="cv-val c-warn" id="cvTrucks">42</div><div class="cv-label">TRUCKS / HV</div></div>
+        <div class="cv-stat"><div class="cv-val c-danger" id="cvAnom">3</div><div class="cv-label">ANOMALIES</div></div>
+      </div>
+      <div style="font-size:9px;color:var(--muted);margin-top:6px;text-align:center;font-family:'JetBrains Mono',monospace">28 FPS avg · mAP@0.5: 94.2% · 4 active CCTV nodes</div>
+    </div>
+
+    <div>
+      <div class="panel-title">Live Event Feed</div>
+      <div class="event-feed" id="eventFeed">
+        <div class="event-item">
+          <div class="ev-icon" style="background:rgba(255,23,68,0.15);color:var(--danger)">!</div>
+          <div style="flex:1"><div class="ev-text">Stalled vehicle — Silk Board Lane 3</div><div class="ev-time">2 min ago</div></div>
+        </div>
+        <div class="event-item">
+          <div class="ev-icon" style="background:rgba(255,107,53,0.15);color:var(--warn)">↑</div>
+          <div style="flex:1"><div class="ev-text">Density spike +34% — MG Rd near Trinity</div><div class="ev-time">5 min ago</div></div>
+        </div>
+        <div class="event-item">
+          <div class="ev-icon" style="background:rgba(0,212,255,0.15);color:var(--accent)">◈</div>
+          <div style="flex:1"><div class="ev-text">LSTM: Standstill predicted — ORR in 25 min</div><div class="ev-time">7 min ago</div></div>
+        </div>
+        <div class="event-item">
+          <div class="ev-icon" style="background:rgba(255,214,0,0.15);color:var(--yellow)">⚡</div>
+          <div style="flex:1"><div class="ev-text">GPS-CCTV mismatch resolved — Hebbal node</div><div class="ev-time">12 min ago</div></div>
+        </div>
+        <div class="event-item">
+          <div class="ev-icon" style="background:rgba(0,230,118,0.15);color:var(--ok)">✓</div>
+          <div style="flex:1"><div class="ev-text">Jam cleared — Koramangala 5th Block</div><div class="ev-time">18 min ago</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Simulation Controls</div>
+      <div class="sim-box">
+        <div>
+          <div class="sim-label"><span style="color:var(--muted)">Traffic Volume</span><span style="font-family:'JetBrains Mono',monospace" id="volLabel">75%</span></div>
+          <input type="range" min="10" max="100" value="75" oninput="updateSim(this.value)">
+        </div>
+        <div class="sim-btns">
+          <button class="sim-btn" onclick="addIncident()">+ Add Incident</button>
+          <button class="sim-btn" onclick="clearAll()">Clear All</button>
+        </div>
+        <div style="font-size:9px;color:var(--muted)">Adjust volume to simulate traffic scenarios</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bottom-bar">
+  <div class="model-status">
+    <div class="model-item"><div class="mdot" style="background:var(--ok)"></div>LSTM Forecaster: Online</div>
+    <div class="model-item"><div class="mdot" style="background:var(--ok)"></div>YOLOv8 CV: 28 FPS</div>
+    <div class="model-item"><div class="mdot" style="background:var(--ok)"></div>Google Maps API: Synced</div>
+    <div class="model-item"><div class="mdot" style="background:var(--accent)"></div>Cross-Modal Fusion: Active</div>
+    <div class="model-item"><div class="mdot" style="background:var(--ok)"></div>RNN Temporal Engine: Running</div>
+  </div>
+  <div style="font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace">PS4 · CYBERJOAR AI OC.41335.2026.59218 · Predictive Traffic Intelligence</div>
+</div>
+
+</div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="cctvModal" onclick="bgClose(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-head-title" id="modalTitle">CCTV Node Inspector</span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-view">
+        <canvas id="modalCam" width="372" height="160" style="width:100%;height:100%"></canvas>
+        <div class="modal-live">● LIVE</div>
+      </div>
+      <div class="modal-stats">
+        <div class="modal-stat">
+          <div class="modal-stat-val" id="m-density" style="color:var(--warn)">—</div>
+          <div class="modal-stat-label">VEHICLE DENSITY %</div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-val" id="m-speed" style="color:var(--accent)">—</div>
+          <div class="modal-stat-label">AVERAGE SPEED</div>
+        </div>
+      </div>
+      <div class="modal-note">
+        <div class="modal-note-label">CV Detection Note (YOLOv8)</div>
+        <div class="modal-note-text" id="m-note">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CLOCK ───────────────────────────────────────────────────────────────
+function tick(){document.getElementById('clockDisplay').textContent=new Date().toLocaleTimeString('en-IN',{hour12:false})}
+tick();setInterval(tick,1000);
+
+// ─── MAP DATA ─────────────────────────────────────────────────────────────
+const NODES=[
+  {x:.28,y:.22,name:'Hebbal Interchange',   density:48, speed:34, level:'Moderate', cam:true,  color:'#ffd600',r:13, prob:'51%'},
+  {x:.48,y:.28,name:'Outer Ring Road N',    density:63, speed:22, level:'Heavy',    cam:false, color:'#ff6b35',r:15, prob:'63%'},
+  {x:.68,y:.18,name:'Yelahanka',            density:19, speed:58, level:'Flowing',  cam:false, color:'#00e676',r: 9, prob:'12%'},
+  {x:.18,y:.44,name:'Peenya Industrial',    density:35, speed:42, level:'Moderate', cam:false, color:'#ffd600',r:12, prob:'30%'},
+  {x:.40,y:.48,name:'MG Road Junction',     density:72, speed:18, level:'Heavy',    cam:true,  color:'#ff6b35',r:17, prob:'74%'},
+  {x:.55,y:.56,name:'Silk Board Flyover',   density:95, speed: 8, level:'Standstill',cam:true, color:'#ff1744',r:21, prob:'92%'},
+  {x:.72,y:.50,name:'HSR Layout',           density:28, speed:48, level:'Flowing',  cam:false, color:'#00e676',r:10, prob:'18%'},
+  {x:.30,y:.66,name:'Kengeri',              density:17, speed:60, level:'Flowing',  cam:false, color:'#00e676',r: 9, prob:'11%'},
+  {x:.50,y:.72,name:'Koramangala',          density:21, speed:52, level:'Flowing',  cam:true,  color:'#00e676',r:10, prob:'15%'},
+  {x:.66,y:.72,name:'Whitefield',           density:34, speed:44, level:'Moderate', cam:false, color:'#ffd600',r:12, prob:'28%'},
+  {x:.82,y:.38,name:'Marathahalli',         density:58, speed:26, level:'Heavy',    cam:false, color:'#ff6b35',r:14, prob:'55%'},
+  {x:.14,y:.70,name:'Banashankari',         density:15, speed:64, level:'Flowing',  cam:false, color:'#00e676',r: 9, prob:'10%'},
+  {x:.76,y:.66,name:'Electronic City',      density:44, speed:38, level:'Moderate', cam:false, color:'#ffd600',r:12, prob:'38%'},
+  {x:.44,y:.36,name:'Predicted Hotspot A',  density:null,speed:null,level:'Predicted',cam:false,color:'rgba(0,212,255,0.7)',r:17, prob:'68%', predicted:true},
+  {x:.60,y:.62,name:'Predicted Hotspot B',  density:null,speed:null,level:'Predicted',cam:false,color:'rgba(0,212,255,0.7)',r:13, prob:'54%', predicted:true},
+];
+
+const ROADS=[
+  {from:[.28,.22],to:[.48,.28],color:'#ffd600',w:3},
+  {from:[.48,.28],to:[.68,.18],color:'#00e676',w:2},
+  {from:[.48,.28],to:[.40,.48],color:'#ff6b35',w:4},
+  {from:[.18,.44],to:[.40,.48],color:'#ffd600',w:3},
+  {from:[.40,.48],to:[.55,.56],color:'#ff1744',w:5},
+  {from:[.55,.56],to:[.72,.50],color:'#00e676',w:2},
+  {from:[.55,.56],to:[.50,.72],color:'#ffd600',w:3},
+  {from:[.50,.72],to:[.66,.72],color:'#ffd600',w:3},
+  {from:[.66,.72],to:[.82,.38],color:'#ff6b35',w:3},
+  {from:[.30,.66],to:[.50,.72],color:'#00e676',w:2},
+  {from:[.40,.48],to:[.30,.66],color:'#00e676',w:2},
+  {from:[.14,.70],to:[.30,.66],color:'#00e676',w:2},
+  {from:[.82,.38],to:[.66,.72],color:'#ff6b35',w:2},
+];
+
+let layer='traffic', incidents=[];
+
+// ─── MAP RENDERING ────────────────────────────────────────────────────────
+const mc=document.getElementById('trafficMap');
+const mctx=mc.getContext('2d');
+
+function resizeMap(){
+  mc.width=mc.parentElement.clientWidth;
+  mc.height=mc.parentElement.clientHeight;
+}
+
+function drawMap(){
+  const W=mc.width,H=mc.height;
+  if(!W||!H){requestAnimationFrame(drawMap);return;}
+  mctx.clearRect(0,0,W,H);
+
+  // Background
+  mctx.fillStyle='#0a0c10';mctx.fillRect(0,0,W,H);
+
+  // Grid
+  mctx.strokeStyle='rgba(30,36,48,0.7)';mctx.lineWidth=.8;
+  for(let x=0;x<W;x+=48){mctx.beginPath();mctx.moveTo(x,0);mctx.lineTo(x,H);mctx.stroke()}
+  for(let y=0;y<H;y+=48){mctx.beginPath();mctx.moveTo(0,y);mctx.lineTo(W,y);mctx.stroke()}
+
+  // Heatmap blobs
+  if(layer==='heatmap'){
+    NODES.filter(n=>!n.predicted).forEach(n=>{
+      const nx=n.x*W,ny=n.y*H;
+      const g=mctx.createRadialGradient(nx,ny,0,nx,ny,n.r*6);
+      const a=Math.min((n.density||0)/100*.5,.45);
+      const hex=Math.round(a*255).toString(16).padStart(2,'0');
+      g.addColorStop(0,n.color+hex);g.addColorStop(1,'transparent');
+      mctx.fillStyle=g;mctx.fillRect(0,0,W,H);
+    });
+  }
+
+  // Roads
+  ROADS.forEach(r=>{
+    mctx.strokeStyle=layer==='heatmap'?'rgba(255,255,255,0.12)':r.color;
+    mctx.lineWidth=layer==='heatmap'?1:r.w;
+    mctx.lineCap='round';mctx.globalAlpha=layer==='heatmap'?.4:.65;
+    mctx.beginPath();mctx.moveTo(r.from[0]*W,r.from[1]*H);mctx.lineTo(r.to[0]*W,r.to[1]*H);mctx.stroke();
+    mctx.globalAlpha=1;
+  });
+
+  // Incidents
+  incidents.forEach(inc=>{
+    const nx=inc.x*W,ny=inc.y*H;
+    mctx.fillStyle='#ff1744';mctx.beginPath();mctx.arc(nx,ny,9,0,Math.PI*2);mctx.fill();
+    mctx.fillStyle='#fff';mctx.font='bold 11px sans-serif';mctx.textAlign='center';mctx.textBaseline='middle';
+    mctx.fillText('!',nx,ny);
+  });
+
+  // Nodes
+  const t=Date.now()/1000;
+  NODES.forEach(n=>{
+    if(layer==='prediction'&&!n.predicted&&(n.density||0)<55)return;
+    const nx=n.x*W,ny=n.y*H;
+    if(n.predicted){
+      const p=(Math.sin(t*2)+1)/2;
+      mctx.fillStyle=`rgba(0,212,255,${.08+p*.1})`;mctx.beginPath();mctx.arc(nx,ny,n.r,0,Math.PI*2);mctx.fill();
+      mctx.setLineDash([4,3]);mctx.strokeStyle='rgba(0,212,255,.85)';mctx.lineWidth=1.5;
+      mctx.beginPath();mctx.arc(nx,ny,n.r,0,Math.PI*2);mctx.stroke();mctx.setLineDash([]);
+    } else {
+      // Glow
+      const g=mctx.createRadialGradient(nx,ny,0,nx,ny,n.r*2.2);
+      g.addColorStop(0,n.color+'30');g.addColorStop(1,'transparent');
+      mctx.fillStyle=g;mctx.fillRect(nx-n.r*2.5,ny-n.r*2.5,n.r*5,n.r*5);
+      // Fill
+      mctx.fillStyle=n.color+'28';mctx.beginPath();mctx.arc(nx,ny,n.r,0,Math.PI*2);mctx.fill();
+      // Ring
+      mctx.strokeStyle=n.color;mctx.lineWidth=2;mctx.beginPath();mctx.arc(nx,ny,n.r,0,Math.PI*2);mctx.stroke();
+      // Core
+      mctx.fillStyle=n.color;mctx.beginPath();mctx.arc(nx,ny,4,0,Math.PI*2);mctx.fill();
+      // Camera icon
+      if(n.cam){
+        mctx.fillStyle='rgba(0,212,255,.9)';mctx.font='9px sans-serif';mctx.textAlign='center';
+        mctx.fillText('◉',nx+n.r-1,ny-n.r+2);
+      }
+    }
+  });
+
+  requestAnimationFrame(drawMap);
+}
+
+// Tooltip
+mc.addEventListener('mousemove',function(e){
+  const r=mc.getBoundingClientRect();
+  const mx=(e.clientX-r.left)/mc.width, my=(e.clientY-r.top)/mc.height;
+  const tt=document.getElementById('nodeTooltip');
+  let hit=null;
+  NODES.forEach(n=>{const dx=mx-n.x,dy=my-n.y;if(Math.sqrt(dx*dx+dy*dy)<0.05)hit=n;});
+  if(hit){
+    tt.style.display='block';
+    tt.style.left=(e.clientX-r.left+14)+'px';
+    tt.style.top=Math.max(0,(e.clientY-r.top-30))+'px';
+    document.getElementById('tt-name').textContent=hit.name;
+    document.getElementById('tt-density').textContent=hit.predicted?'Predicted':hit.density+'%';
+    document.getElementById('tt-speed').textContent=hit.predicted?'—':hit.speed+' km/h';
+    document.getElementById('tt-level').textContent=hit.level;
+    document.getElementById('tt-cam').textContent=hit.cam?'Active':'None';
+    document.getElementById('tt-prob').textContent=hit.prob;
+  } else {tt.style.display='none';}
+});
+mc.addEventListener('mouseleave',()=>document.getElementById('nodeTooltip').style.display='none');
+
+function setLayer(l,btn){
+  layer=l;
+  document.querySelectorAll('.map-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ─── CCTV MINI FEEDS ──────────────────────────────────────────────────────
+function drawMini(id,density){
+  const c=document.getElementById(id);if(!c)return;
+  const cx=c.getContext('2d'),W=c.width,H=c.height,t=Date.now()/1000;
+  cx.fillStyle='#050608';cx.fillRect(0,0,W,H);
+  cx.fillStyle='#141820';cx.fillRect(0,H*.38,W,H*.62);
+  cx.setLineDash([5,5]);cx.strokeStyle='rgba(255,214,0,.2)';cx.lineWidth=.8;
+  [.55,.72].forEach(y=>{cx.beginPath();cx.moveTo(0,H*y);cx.lineTo(W,H*y);cx.stroke();});
+  cx.setLineDash([]);
+  const n=Math.max(Math.floor(density/100*5)+1,1);
+  for(let i=0;i<n;i++){
+    const spd=(100-density)*.35+4;
+    const lane=i%3;
+    const cx2=((t*spd*(i%2?1:-1)+i*(W/n)*1.5)%W+W)%W;
+    const cy2=H*.42+lane*14;
+    cx.fillStyle=i===0&&density>80?'#ff1744':'#2a3040';
+    cx.fillRect(cx2,cy2,15,8);
+    cx.fillStyle='rgba(180,220,255,.5)';cx.fillRect(cx2+1,cy2+1,4,2);cx.fillRect(cx2+10,cy2+1,4,2);
+  }
+  const scanY=(t*25)%H;
+  cx.strokeStyle='rgba(0,212,255,.1)';cx.lineWidth=1;cx.setLineDash([]);
+  cx.beginPath();cx.moveTo(0,scanY);cx.lineTo(W,scanY);cx.stroke();
+  cx.fillStyle='rgba(0,212,255,.5)';cx.font='6px monospace';cx.textAlign='left';
+  cx.fillText('VEH:'+(Math.floor(density*.28+1))+' | '+(Math.floor((100-density)*.45+5))+'km/h',2,H-2);
+}
+
+function loopMini(){
+  const t=Date.now()/1000;
+  drawMini('cctv1',70+10*Math.sin(t*.3));
+  drawMini('cctv2',94+4*Math.sin(t*.2));
+  drawMini('cctv3',48+8*Math.sin(t*.5));
+  drawMini('cctv4',21+5*Math.sin(t*.4));
+  requestAnimationFrame(loopMini);
+}
+
+// ─── MODAL ────────────────────────────────────────────────────────────────
+let modalActive=false;
+
+function openModal(name,level,density,speed,note){
+  document.getElementById('cctvModal').classList.add('open');
+  document.getElementById('modalTitle').textContent='Node Inspector — '+name;
+  document.getElementById('m-density').textContent=density+'%';
+  document.getElementById('m-speed').textContent=speed;
+  document.getElementById('m-note').textContent=note;
+  const col=level==='Critical'?'#ff1744':level==='High'?'#ff6b35':level==='Moderate'?'#ffd600':'#00e676';
+  document.getElementById('m-density').style.color=col;
+  modalActive=true;
+  loopModal(density);
+}
+
+function loopModal(density){
+  if(!modalActive)return;
+  const mc2=document.getElementById('modalCam');
+  const cx=mc2.getContext('2d'),W=mc2.width,H=mc2.height,t=Date.now()/1000;
+  cx.fillStyle='#050608';cx.fillRect(0,0,W,H);
+  cx.fillStyle='#141820';cx.fillRect(0,H*.28,W,H*.72);
+  cx.setLineDash([7,7]);cx.strokeStyle='rgba(255,214,0,.25)';cx.lineWidth=1;
+  [.52,.7,.85].forEach(y=>{cx.beginPath();cx.moveTo(0,H*y);cx.lineTo(W,H*y);cx.stroke();});
+  cx.setLineDash([]);
+  const n=Math.max(Math.floor(density/100*12),2);
+  for(let i=0;i<n;i++){
+    const spd=(100-density)*.38+4;
+    const lane=i%4;
+    const cx2=((t*spd*(i%2?1:-1)+i*(W/n)*1.2)%W+W)%W;
+    const cy2=H*.32+lane*18;
+    cx.fillStyle=i===0&&density>80?'#ff1744':['#1e2838','#243040','#1a2030'][i%3];
+    cx.fillRect(cx2,cy2,20,11);
+    cx.fillStyle='rgba(160,210,255,.6)';cx.fillRect(cx2+2,cy2+1,5,3);cx.fillRect(cx2+13,cy2+1,5,3);
+    if(density>70){cx.fillStyle='rgba(255,80,30,.25)';cx.beginPath();cx.arc(cx2+10,cy2+5,16,0,Math.PI*2);cx.fill();}
+  }
+  const scanY=(t*45)%H;
+  cx.strokeStyle='rgba(0,212,255,.18)';cx.lineWidth=1.5;
+  cx.beginPath();cx.moveTo(0,scanY);cx.lineTo(W,scanY);cx.stroke();
+  cx.fillStyle='rgba(0,212,255,.65)';cx.font='9px monospace';cx.textAlign='left';
+  cx.fillText('FRAME:'+(Math.floor(t*28)%9999).toString().padStart(4,'0')+' | DETECT:'+n+' vehicles | CONF:'+(0.91+Math.random()*.06).toFixed(2)+' | YOLOv8',5,H-5);
+  requestAnimationFrame(()=>loopModal(density));
+}
+
+function closeModal(){modalActive=false;document.getElementById('cctvModal').classList.remove('open');}
+function bgClose(e){if(e.target.id==='cctvModal')closeModal();}
+
+// ─── FORECAST CHART ───────────────────────────────────────────────────────
+function initForecast(){
+  new Chart(document.getElementById('forecastChart'),{
+    type:'line',
+    data:{
+      labels:['Now','+5m','+10m','+15m','+20m','+25m','+30m','+35m','+40m','+45m'],
+      datasets:[
+        {label:'Congestion Index',data:[52,58,65,72,80,85,88,84,77,70],
+         borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,0.07)',
+         borderWidth:2,pointRadius:3,pointBackgroundColor:'#00d4ff',tension:.4,fill:true},
+        {label:'Danger Threshold',data:Array(10).fill(75),
+         borderColor:'rgba(255,23,68,0.45)',borderDash:[4,3],borderWidth:1,pointRadius:0,fill:false}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#4a5568',font:{size:9}},grid:{color:'rgba(30,36,48,0.8)'}},
+        y:{min:0,max:100,ticks:{color:'#4a5568',font:{size:9}},grid:{color:'rgba(30,36,48,0.8)'}}
+      }
+    }
+  });
+}
+
+// ─── LIVE UPDATES ─────────────────────────────────────────────────────────
+function liveUpdate(){
+  const t=Date.now()/1000;
+  document.getElementById('vehicleCount').textContent=Math.round(847+30*Math.sin(t*.1));
+  document.getElementById('avgSpeed').textContent=Math.round(23+5*Math.sin(t*.08));
+  document.getElementById('cvCars').textContent=Math.round(612+20*Math.sin(t*.12));
+  document.getElementById('cvBikes').textContent=Math.round(183+15*Math.sin(t*.15));
+  const p1v=Math.min(99,Math.max(88,92+4*Math.sin(t*.2)));
+  const p2v=Math.min(85,Math.max(62,74+6*Math.sin(t*.17)));
+  document.getElementById('p1').textContent=Math.round(p1v)+'%';document.getElementById('pb1').style.width=Math.round(p1v)+'%';
+  document.getElementById('p2').textContent=Math.round(p2v)+'%';document.getElementById('pb2').style.width=Math.round(p2v)+'%';
+}
+setInterval(liveUpdate,2000);
+
+// ─── SIMULATION ───────────────────────────────────────────────────────────
+function updateSim(v){
+  document.getElementById('volLabel').textContent=v+'%';
+  const f=v/75;
+  document.getElementById('vehicleCount').textContent=Math.round(847*f);
+  document.getElementById('avgSpeed').textContent=Math.round(Math.max(5,23/f*.9));
+  document.getElementById('congestionZones').textContent=Math.round(Math.min(12,4*f));
+  document.getElementById('clearRoads').textContent=Math.round(Math.max(1,10/f*.8));
+}
+
+function addIncident(){
+  incidents.push({x:.25+Math.random()*.5,y:.2+Math.random()*.6});
+  const feed=document.getElementById('eventFeed');
+  const d=document.createElement('div');d.className='event-item';
+  d.innerHTML=`<div class="ev-icon" style="background:rgba(255,23,68,0.15);color:var(--danger)">!</div><div style="flex:1"><div class="ev-text">Manual incident added — CV verification pending</div><div class="ev-time">just now</div></div>`;
+  feed.prepend(d);
+}
+
+function clearAll(){incidents=[];}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  resizeMap();
+  drawMap();
+  loopMini();
+  initForecast();
+});
+window.addEventListener('resize',()=>{resizeMap();});
+</script>
+</body>
+</html>
